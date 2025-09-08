@@ -10,8 +10,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
 
   describe("Deployment", function () {
     it("Should set the right owner and platform wallet", async function () {
-      const [owner, platformWallet] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [owner] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       assert.equal(
         (await marketplace.read.contractOwner()).toLowerCase(),
@@ -19,13 +19,12 @@ describe("CertifiedSecondHandMarketplace", async function () {
       );
       assert.equal(
         (await marketplace.read.platformWallet()).toLowerCase(),
-        platformWallet.account.address.toLowerCase()
+        owner.account.address.toLowerCase()
       );
     });
 
     it("Should initialize with zero items", async function () {
-      const [owner, platformWallet] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       assert.equal(await marketplace.read.getTotalItemsCount(), 0n);
       assert.equal(await marketplace.read.getActiveItemsCount(), 0n);
@@ -33,20 +32,18 @@ describe("CertifiedSecondHandMarketplace", async function () {
       assert.equal(await marketplace.read.getCertifiedItemsCount(), 0n);
     });
 
-    it("Should set deployer and platform wallet as certifiers", async function () {
-      const [owner, platformWallet] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+    it("Should set deployer as certifier", async function () {
+      const [owner] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       assert.equal(await marketplace.read.certifiers([owner.account.address]), true);
-      assert.equal(await marketplace.read.certifiers([platformWallet.account.address]), true);
     });
   });
 
   describe("User Registration", function () {
     it("Should allow users to register", async function () {
       const [, , user1] = await viem.getWalletClients();
-      const [, platformWallet] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       const hash = await marketplace.write.registerUser({
         account: user1.account,
@@ -58,8 +55,7 @@ describe("CertifiedSecondHandMarketplace", async function () {
 
     it("Should prevent duplicate registration", async function () {
       const [, , user1] = await viem.getWalletClients();
-      const [, platformWallet] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       let hash = await marketplace.write.registerUser({
         account: user1.account,
@@ -77,8 +73,7 @@ describe("CertifiedSecondHandMarketplace", async function () {
   describe("Item Registration", function () {
     it("Should allow registered users to register items", async function () {
       const [, , user1] = await viem.getWalletClients();
-      const [, platformWallet] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register user first
       let hash = await marketplace.write.registerUser({
@@ -113,8 +108,7 @@ describe("CertifiedSecondHandMarketplace", async function () {
 
     it("Should prevent duplicate serial numbers", async function () {
       const [, , user1] = await viem.getWalletClients();
-      const [, platformWallet] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register user first
       let hash = await marketplace.write.registerUser({
@@ -150,8 +144,7 @@ describe("CertifiedSecondHandMarketplace", async function () {
 
     it("Should prevent unregistered users from registering items", async function () {
       const [, , user1] = await viem.getWalletClients();
-      const [, platformWallet] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Try to register item without registering user first
       await assert.rejects(async () => {
@@ -170,8 +163,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
 
   describe("Item Certification", function () {
     it("Should allow certifiers to certify items", async function () {
-      const [owner, platformWallet, user1] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [owner, , user1] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register user and item
       let hash = await marketplace.write.registerUser({
@@ -205,8 +198,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
     });
 
     it("Should prevent non-certifiers from certifying items", async function () {
-      const [, platformWallet, user1, nonCertifier] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [, , user1, nonCertifier] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register user and item
       let hash = await marketplace.write.registerUser({
@@ -242,8 +235,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
 
   describe("Item Listing and Sales", function () {
     it("Should allow owners to list items for sale", async function () {
-      const [, platformWallet, user1] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [, , user1] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register user and item
       let hash = await marketplace.write.registerUser({
@@ -275,8 +268,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
     });
 
     it("Should prevent non-owners from listing items", async function () {
-      const [, platformWallet, user1, user2] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [, , user1, user2] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register users
       let hash = await marketplace.write.registerUser({
@@ -310,8 +303,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
     });
 
     it("Should allow purchasing items with platform fee", async function () {
-      const [, platformWallet, seller, buyer] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [owner, seller, buyer] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register users
       let hash = await marketplace.write.registerUser({
@@ -347,7 +340,7 @@ describe("CertifiedSecondHandMarketplace", async function () {
         address: seller.account.address,
       });
       const platformBalanceBefore = await publicClient.getBalance({
-        address: platformWallet.account.address,
+        address: owner.account.address, // platformWallet is owner by default
       });
 
       // Purchase item
@@ -362,7 +355,7 @@ describe("CertifiedSecondHandMarketplace", async function () {
         address: seller.account.address,
       });
       const platformBalanceAfter = await publicClient.getBalance({
-        address: platformWallet.account.address,
+        address: owner.account.address,
       });
 
       // Calculate expected amounts
@@ -389,8 +382,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
     });
 
     it("Should prevent self-purchase", async function () {
-      const [, platformWallet, user1] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [, , user1] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register user and item
       let hash = await marketplace.write.registerUser({
@@ -428,8 +421,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
 
   describe("Item Transfers", function () {
     it("Should allow owners to transfer items to registered users", async function () {
-      const [, platformWallet, user1, user2] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [, , user1, user2] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register users
       let hash = await marketplace.write.registerUser({
@@ -467,8 +460,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
     });
 
     it("Should prevent transfers to unregistered users", async function () {
-      const [, platformWallet, user1, unregisteredUser] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [, , user1, unregisteredUser] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register user1 only
       let hash = await marketplace.write.registerUser({
@@ -499,8 +492,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
 
   describe("View Functions", function () {
     it("Should return correct item verification details", async function () {
-      const [, platformWallet, user1] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [, , user1] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register user and item
       let hash = await marketplace.write.registerUser({
@@ -531,8 +524,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
     });
 
     it("Should return user items correctly", async function () {
-      const [, platformWallet, user1] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [, , user1] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register user
       let hash = await marketplace.write.registerUser({
@@ -562,8 +555,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
     });
 
     it("Should return available items correctly", async function () {
-      const [, platformWallet, user1, user2] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [, , user1, user2] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register users
       let hash = await marketplace.write.registerUser({
@@ -612,8 +605,8 @@ describe("CertifiedSecondHandMarketplace", async function () {
 
   describe("Edge Cases", function () {
     it("Should handle item history correctly", async function () {
-      const [, platformWallet, user1, user2] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const [, , user1, user2] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Register users
       let hash = await marketplace.write.registerUser({
@@ -652,8 +645,7 @@ describe("CertifiedSecondHandMarketplace", async function () {
     });
 
     it("Should handle non-existent items correctly", async function () {
-      const [, platformWallet] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", [platformWallet.account.address]);
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       // Verify non-existent serial number
       const verification = await marketplace.read.verifyItemBySerialNumber(["NONEXISTENT"]);

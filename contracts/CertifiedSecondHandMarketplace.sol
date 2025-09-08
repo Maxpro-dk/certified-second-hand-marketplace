@@ -20,7 +20,7 @@ contract CertifiedSecondHandMarketplace {
      * @param value Valeur estimée du bien
      * @param description Description détaillée du bien
      * @param serialNumber Numéro de série unique
-     * @param originalOwner Propriétaire initial du bien
+     * @param owner Propriétaire actuel du bien
      * @param imageURI Lien vers l'image du bien (IPFS ou autre)
      * @param isForSale Indique si le bien est en vente
      * @param salePrice Prix de vente si le bien est en vente
@@ -33,7 +33,7 @@ contract CertifiedSecondHandMarketplace {
         uint256 value;
         string description;
         string serialNumber;
-        address originalOwner;
+        address owner;
         string imageURI;
         bool isForSale;
         uint256 salePrice;
@@ -95,7 +95,7 @@ contract CertifiedSecondHandMarketplace {
     // Modificateurs
 
     /**
-     * @dev Vérifie que l'utilisateur is enregistré
+     * @dev Vérifie que l'utilisateur est enregistré
      */
     modifier onlyRegisteredUser() {
         require(registeredUsers[msg.sender], "User not registered");
@@ -104,10 +104,10 @@ contract CertifiedSecondHandMarketplace {
     
     /**
      * @dev Vérifie que l'utilisateur est propriétaire de l'item
-     * @param tokenId ID de l'item à vérifier
+     * @param _tokenId ID de l'item à vérifier
      */
-    modifier onlyItemOwner(uint256 tokenId) {
-        require(tokenOwner[tokenId] == msg.sender, "Not the owner");
+    modifier onlyItemOwner(uint256 _tokenId) {
+        require(tokenOwner[_tokenId] == msg.sender, "Not the owner");
         _;
     }
     
@@ -129,23 +129,22 @@ contract CertifiedSecondHandMarketplace {
     
     /**
      * @dev Vérifie que l'item existe
-     * @param tokenId ID de l'item à vérifier
+     * @param _tokenId ID de l'item à vérifier
      */
-    modifier itemExists(uint256 tokenId) {
-        require(tokenOwner[tokenId] != address(0), "Item does not exist");
+    modifier itemExists(uint256 _tokenId) {
+        require(tokenOwner[_tokenId] != address(0), "Item does not exist");
         _;
     }
     
     /**
      * @dev Constructeur du contrat
-     * @param _platformWallet Adresse du portefeuille pour recevoir les frais
      */
-    constructor(address _platformWallet) {
+    constructor() {
         contractOwner = msg.sender;
-        platformWallet = _platformWallet;
+        platformWallet = msg.sender;
         // Le déployeur et le portefeuille de frais sont automatiquement certifiers
         certifiers[msg.sender] = true;
-        certifiers[_platformWallet] = true;
+        certifiers[platformWallet] = true;
     }
     
     /**
@@ -169,38 +168,38 @@ contract CertifiedSecondHandMarketplace {
     
     /**
      * @dev Enregistre un nouveau bien sur la plateforme
-     * @param name Nom du produit
-     * @param value Valeur estimée
-     * @param description Description détaillée
-     * @param serialNumber Numéro de série unique
-     * @param imageURI Lien vers l'image du produit
+     * @param _name Nom du produit
+     * @param _value Valeur estimée
+     * @param _description Description détaillée
+     * @param _serialNumber Numéro de série unique
+     * @param _imageURI Lien vers l'image du produit
      * @notice Le numéro de série doit être unique
      */
     function registerItem(
-        string memory name,
-        uint256 value,
-        string memory description,
-        string memory serialNumber,
-        string memory imageURI
+        string memory _name,
+        uint256 _value,
+        string memory _description,
+        string memory _serialNumber,
+        string memory _imageURI
     ) external onlyRegisteredUser {
-        require(serialNumberToTokenId[serialNumber] == 0, "Serial number exists");
+        require(serialNumberToTokenId[_serialNumber] == 0, "Serial number exists");
         
         // Incrémente le compteur et génère un nouvel ID
         _tokenIdCounter++;
-        uint256 tokenId = _tokenIdCounter;
+        uint256 _tokenId = _tokenIdCounter;
         
         // Définit le propriétaire initial
-        tokenOwner[tokenId] = msg.sender;
+        tokenOwner[_tokenId] = msg.sender;
         
         // Crée le nouvel item
-        items[tokenId] = Item({
-            tokenId: tokenId,
-            name: name,
-            value: value,
-            description: description,
-            serialNumber: serialNumber,
-            originalOwner: msg.sender,
-            imageURI: imageURI,
+        items[_tokenId] = Item({
+            tokenId: _tokenId,
+            name: _name,
+            value: _value,
+            description: _description,
+            serialNumber: _serialNumber,
+            owner: msg.sender,
+            imageURI: _imageURI,
             isForSale: false,
             salePrice: 0,
             isCertified: false,
@@ -208,13 +207,13 @@ contract CertifiedSecondHandMarketplace {
         });
         
         // Enregistre le mapping numéro de série → ID
-        serialNumberToTokenId[serialNumber] = tokenId;
+        serialNumberToTokenId[_serialNumber] = _tokenId;
         
         // Ajoute l'item à la liste de l'utilisateur
-        userItems[msg.sender].push(tokenId);
+        userItems[msg.sender].push(_tokenId);
         
         // Enregistre la transaction initiale
-        itemTransactions[tokenId].push(Transaction({
+        itemTransactions[_tokenId].push(Transaction({
             previousOwner: address(0),
             newOwner: msg.sender,
             transferDate: block.timestamp,
@@ -222,45 +221,45 @@ contract CertifiedSecondHandMarketplace {
             price: 0
         }));
         
-        emit ItemRegistered(tokenId, serialNumber, msg.sender);
+        emit ItemRegistered(_tokenId, _serialNumber, msg.sender);
     }
     
     /**
      * @dev Certifie un bien
-     * @param tokenId ID du bien à certifier
+     * @param _tokenId ID du bien à certifier
      * @notice Seuls les certifiers autorisés peuvent certifier des biens
      */
-    function certifyItem(uint256 tokenId) external onlyCertifier itemExists(tokenId) {
-        Item storage item = items[tokenId];
+    function certifyItem(uint256 _tokenId) external onlyCertifier itemExists(_tokenId) {
+        Item storage item = items[_tokenId];
         item.isCertified = true;
         item.certifiedBy = msg.sender;
-        emit ItemCertified(tokenId, msg.sender);
+        emit ItemCertified(_tokenId, msg.sender);
     }
     
     /**
      * @dev Met un bien en vente
-     * @param tokenId ID du bien à mettre en vente
-     * @param salePrice Prix de vente
+     * @param _tokenId ID du bien à mettre en vente
+     * @param _salePrice Prix de vente
      * @notice Seul le propriétaire peut mettre son bien en vente
      */
-    function listItemForSale(uint256 tokenId, uint256 salePrice) external onlyItemOwner(tokenId) {
-        items[tokenId].isForSale = true;
-        items[tokenId].salePrice = salePrice;
-        emit ItemForSale(tokenId, salePrice);
+    function listItemForSale(uint256 _tokenId, uint256 _salePrice) external onlyItemOwner(_tokenId) {
+        items[_tokenId].isForSale = true;
+        items[_tokenId].salePrice = _salePrice;
+        emit ItemForSale(_tokenId, _salePrice);
     }
     
     /**
      * @dev Achète un bien en vente
-     * @param tokenId ID du bien à acheter
+     * @param _tokenId ID du bien à acheter
      * @notice Le prix payé doit couvrir le prix de vente
      */
-    function purchaseItem(uint256 tokenId) external payable onlyRegisteredUser itemExists(tokenId) {
-        Item storage item = items[tokenId];
+    function purchaseItem(uint256 _tokenId) external payable onlyRegisteredUser itemExists(_tokenId) {
+        Item storage item = items[_tokenId];
         require(item.isForSale, "Not for sale");
         require(msg.value >= item.salePrice, "Insufficient funds");
-        require(tokenOwner[tokenId] != msg.sender, "Cannot buy own item");
+        require(tokenOwner[_tokenId] != msg.sender, "Cannot buy own item");
         
-        address seller = tokenOwner[tokenId];
+        address seller = tokenOwner[_tokenId];
         uint256 salePrice = item.salePrice;
         
         // Calcul des frais de plateforme et du montant pour le vendeur
@@ -268,7 +267,7 @@ contract CertifiedSecondHandMarketplace {
         uint256 sellerAmount = salePrice - platformFeeAmount;
         
         // Transfert de propriété
-        tokenOwner[tokenId] = msg.sender;
+        tokenOwner[_tokenId] = msg.sender;
         
         // Transfert des fonds
         payable(seller).transfer(sellerAmount);
@@ -281,70 +280,96 @@ contract CertifiedSecondHandMarketplace {
         
         // Mise à jour du statut de vente
         item.isForSale = false;
+
+
         
         // Enregistrement de la transaction
-        itemTransactions[tokenId].push(Transaction({
+        itemTransactions[_tokenId].push(Transaction({
             previousOwner: seller,
             newOwner: msg.sender,
             transferDate: block.timestamp,
             transactionType: "Sale",
             price: salePrice
         }));
+
+         // Retirer l'item de la liste de l'ancien propriétaire
+        uint256[] storage previousOwnerItems = userItems[seller];
+        for (uint256 i = 0; i < previousOwnerItems.length; i++) {
+            if (previousOwnerItems[i] == _tokenId) {
+                // Déplacer le dernier élément à la place de celui à supprimer
+                previousOwnerItems[i] = previousOwnerItems[previousOwnerItems.length - 1];
+                // Supprimer le dernier élément
+                previousOwnerItems.pop();
+                break;
+            }
+        }
         
         // Ajout à la liste des items de l'acheteur
-        userItems[msg.sender].push(tokenId);
+        userItems[msg.sender].push(_tokenId);
         
-        emit ItemSold(tokenId, msg.sender, salePrice);
-        emit ItemTransferred(tokenId, seller, msg.sender);
+        emit ItemSold(_tokenId, msg.sender, salePrice);
+        emit ItemTransferred(_tokenId, seller, msg.sender);
     }
     
     /**
      * @dev Transfert gratuit d'un bien (don)
-     * @param to Adresse du destinataire
-     * @param tokenId ID du bien à transférer
+     * @param _to Adresse du destinataire
+     * @param _tokenId ID du bien à transférer
      * @notice Le destinataire doit être un utilisateur enregistré
      */
-    function transferItem(address to, uint256 tokenId) external onlyItemOwner(tokenId) {
-        require(registeredUsers[to], "Recipient not registered");
+    function transferItem(address _to, uint256 _tokenId) external onlyItemOwner(_tokenId) {
+        require(registeredUsers[_to], "Recipient not registered");
         
-        address previousOwner = tokenOwner[tokenId];
-        tokenOwner[tokenId] = to;
+        address previousOwner = tokenOwner[_tokenId];
+        tokenOwner[_tokenId] = _to;
         
         // Si l'item était en vente, annulation de la vente
-        if (items[tokenId].isForSale) {
-            items[tokenId].isForSale = false;
+        if (items[_tokenId].isForSale) {
+            items[_tokenId].isForSale = false;
         }
         
+        // Retirer l'item de la liste de l'ancien propriétaire
+        uint256[] storage previousOwnerItems = userItems[previousOwner];
+        for (uint256 i = 0; i < previousOwnerItems.length; i++) {
+            if (previousOwnerItems[i] == _tokenId) {
+                // Déplacer le dernier élément à la place de celui à supprimer
+                previousOwnerItems[i] = previousOwnerItems[previousOwnerItems.length - 1];
+                // Supprimer le dernier élément
+                previousOwnerItems.pop();
+                break;
+            }
+        }
+        
+        // Ajout à la liste du destinataire
+        userItems[_to].push(_tokenId);
+        
         // Enregistrement de la transaction
-        itemTransactions[tokenId].push(Transaction({
+        itemTransactions[_tokenId].push(Transaction({
             previousOwner: previousOwner,
-            newOwner: to,
+            newOwner: _to,
             transferDate: block.timestamp,
             transactionType: "Transfer",
             price: 0
         }));
         
-        // Ajout à la liste du destinataire
-        userItems[to].push(tokenId);
-        
-        emit ItemTransferred(tokenId, previousOwner, to);
+        emit ItemTransferred(_tokenId, previousOwner, _to);
     }
     
     /**
      * @dev Vérifie l'authenticité d'un bien par son numéro de série
-     * @param serialNumber Numéro de série à vérifier
+     * @param _serialNumber Numéro de série à vérifier
      * @return exists Si le bien existe
      * @return tokenId ID du bien
      * @return owner Propriétaire actuel
      * @return isCertified Si le bien est certifié
      */
-    function verifyItemBySerialNumber(string memory serialNumber) external view returns (
+    function verifyItemBySerialNumber(string memory _serialNumber) external view returns (
         bool exists,
         uint256 tokenId,
         address owner,
         bool isCertified
     ) {
-        tokenId = serialNumberToTokenId[serialNumber];
+        tokenId = serialNumberToTokenId[_serialNumber];
         if (tokenId == 0 || tokenOwner[tokenId] == address(0)) {
             return (false, 0, address(0), false);
         }
@@ -354,20 +379,20 @@ contract CertifiedSecondHandMarketplace {
     
     /**
      * @dev Récupère l'historique des transactions d'un bien
-     * @param tokenId ID du bien
+     * @param _tokenId ID du bien
      * @return Tableau des transactions
      */
-    function getItemHistory(uint256 tokenId) external view itemExists(tokenId) returns (Transaction[] memory) {
-        return itemTransactions[tokenId];
+    function getItemHistory(uint256 _tokenId) external view itemExists(_tokenId) returns (Transaction[] memory) {
+        return itemTransactions[_tokenId];
     }
     
     /**
      * @dev Récupère les items d'un utilisateur
-     * @param user Adresse de l'utilisateur
+     * @param _user Adresse de l'utilisateur
      * @return Tableau des IDs d'items
      */
-    function getUserItems(address user) external view returns (uint256[] memory) {
-        return userItems[user];
+    function getUserItems(address _user) external view returns (uint256[] memory) {
+        return userItems[_user];
     }
     
     /**
@@ -460,11 +485,10 @@ contract CertifiedSecondHandMarketplace {
     
     /**
      * @dev Récupère le propriétaire d'un bien
-     * @param tokenId ID du bien
+     * @param _tokenId ID du bien
      * @return Adresse du propriétaire
      */
-    function ownerOf(uint256 tokenId) public view returns (address) {
-        return tokenOwner[tokenId];
+    function ownerOf(uint256 _tokenId) public view returns (address) {
+        return tokenOwner[_tokenId];
     }
-  
 }
