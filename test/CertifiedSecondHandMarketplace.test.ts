@@ -9,247 +9,204 @@ describe("CertifiedSecondHandMarketplace", async function () {
   const publicClient = await viem.getPublicClient();
 
   describe("Deployment", function () {
-    it("Should set the right owner and platform wallet", async function () {
+    it("Should set the right owner", async function () {
       const [owner] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       assert.equal(
-        (await marketplace.read.contractOwner()).toLowerCase(),
-        owner.account.address.toLowerCase()
-      );
-      assert.equal(
-        (await marketplace.read.platformWallet()).toLowerCase(),
+        (await marketplace.read.owner()).toLowerCase(),
         owner.account.address.toLowerCase()
       );
     });
 
-    it("Should initialize with zero items", async function () {
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
-
-      assert.equal(await marketplace.read.getTotalItemsCount(), 0n);
-      assert.equal(await marketplace.read.getActiveItemsCount(), 0n);
-      assert.equal(await marketplace.read.getAvailableItemsCount(), 0n);
-      assert.equal(await marketplace.read.getCertifiedItemsCount(), 0n);
-    });
-
-    it("Should set deployer as certifier", async function () {
+    it("Should set owner as certifier", async function () {
       const [owner] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
       assert.equal(await marketplace.read.certifiers([owner.account.address]), true);
     });
-  });
 
-  describe("User Registration", function () {
-    it("Should allow users to register", async function () {
-      const [, , user1] = await viem.getWalletClients();
+    it("Should initialize with zero items", async function () {
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+      const items = await marketplace.read.getAllItems();
 
-      const hash = await marketplace.write.registerUser({
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      assert.equal(await marketplace.read.registeredUsers([user1.account.address]), true);
-    });
-
-    it("Should prevent duplicate registration", async function () {
-      const [, , user1] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
-
-      let hash = await marketplace.write.registerUser({
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      await assert.rejects(async () => {
-        await marketplace.write.registerUser({
-          account: user1.account,
-        });
-      }, /Already registered/);
+      assert.equal(items[0].length, 0); // ids
+      assert.equal(items[1].length, 0); // names
     });
   });
 
   describe("Item Registration", function () {
-    it("Should allow registered users to register items", async function () {
-      const [, , user1] = await viem.getWalletClients();
+    it("Should allow anyone to register items without user registration", async function () {
+      const [, user1] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
-      // Register user first
-      let hash = await marketplace.write.registerUser({
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      // Register item
-      hash = await marketplace.write.registerItem([
-        "Test Item",
-        parseEther("1.0"),
-        "A test item description",
-        "SN123456",
-        "ipfs://test-image"
+      const hash = await marketplace.write.registerItem([
+        "iPhone 12",
+        "SN123456789",
+        "iPhone 12 en excellent état",
+        "ipfs://Qm..."
       ], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      assert.equal(await marketplace.read.getTotalItemsCount(), 1n);
-      assert.equal(await marketplace.read.getActiveItemsCount(), 1n);
-      
-      const item = await marketplace.read.items([1n]);
-      assert.equal(item[1], "Test Item"); // name
-      assert.equal(item[2], parseEther("1.0")); // value
-      assert.equal(item[4], "SN123456"); // serialNumber
+      const items = await marketplace.read.getAllItems();
+      assert.equal(items[0].length, 1);
+      assert.equal(items[1][0], "iPhone 12");
+      assert.equal(items[2][0], "SN123456789");
       assert.equal(
-        item[5].toLowerCase(), // originalOwner
+        items[3][0].toLowerCase(),
         user1.account.address.toLowerCase()
       );
     });
 
-    it("Should prevent duplicate serial numbers", async function () {
-      const [, , user1] = await viem.getWalletClients();
+    it("Should return user items after registration", async function () {
+      const [, user1] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
-      // Register user first
-      let hash = await marketplace.write.registerUser({
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      // Register first item
-      hash = await marketplace.write.registerItem([
-        "Test Item 1",
-        parseEther("1.0"),
-        "First test item",
-        "SN123456",
-        "ipfs://test-image-1"
+      const hash = await marketplace.write.registerItem([
+        "MacBook Pro",
+        "SN987654321",
+        "MacBook Pro 2020",
+        "ipfs://Qm..."
       ], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      // Try to register second item with same serial number
-      await assert.rejects(async () => {
-        await marketplace.write.registerItem([
-          "Test Item 2",
-          parseEther("2.0"),
-          "Second test item",
-          "SN123456", // Same serial number
-          "ipfs://test-image-2"
-        ], {
-          account: user1.account,
-        });
-      }, /Serial number exists/);
-    });
-
-    it("Should prevent unregistered users from registering items", async function () {
-      const [, , user1] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
-
-      // Try to register item without registering user first
-      await assert.rejects(async () => {
-        await marketplace.write.registerItem([
-          "Test Item",
-          parseEther("1.0"),
-          "A test item",
-          "SN123456",
-          "ipfs://test-image"
-        ], {
-          account: user1.account,
-        });
-      }, /User not registered/);
-    });
-  });
-
-  describe("Item Certification", function () {
-    it("Should allow certifiers to certify items", async function () {
-      const [owner, , user1] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
-
-      // Register user and item
-      let hash = await marketplace.write.registerUser({
+      const userItems = await marketplace.read.getUserItems({
         account: user1.account,
       });
-      await publicClient.waitForTransactionReceipt({ hash });
+      assert.equal(userItems.length, 1);
+      assert.equal(userItems[0], 1);
+    });
 
-      hash = await marketplace.write.registerItem([
+    it("Should create initial transaction on registration", async function () {
+      const [, user1] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      const hash = await marketplace.write.registerItem([
         "Test Item",
-        parseEther("1.0"),
-        "A test item",
         "SN123456",
+        "A test item",
         "ipfs://test-image"
       ], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      // Certify item (owner is a certifier by default)
-      hash = await marketplace.write.certifyItem([1n], {
+      const item = await marketplace.read.getItem([1]);
+      assert.equal(item[9], 1n); // transactionCount should be 1
+
+      const transactions = await marketplace.read.getItemTransactions([1]);
+      assert.equal(transactions[0].length, 1); // owners array
+      assert.equal(
+        transactions[0][0].toLowerCase(),
+        user1.account.address.toLowerCase()
+      );
+      assert.equal(transactions[2][0], 0n); // salePrice should be 0 for registration
+    });
+  });
+
+  describe("Certification", function () {
+    it("Should add new certifier", async function () {
+      const [owner, , certifier] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      const hash = await marketplace.write.addCertifier([certifier.account.address], {
         account: owner.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      const item = await marketplace.read.items([1n]);
-      assert.equal(item[9], true); // isCertified
-      assert.equal(
-        item[10].toLowerCase(), // certifiedBy
-        owner.account.address.toLowerCase()
-      );
+      assert.equal(await marketplace.read.certifiers([certifier.account.address]), true);
     });
 
-    it("Should prevent non-certifiers from certifying items", async function () {
-      const [, , user1, nonCertifier] = await viem.getWalletClients();
+    it("Should only allow owner to add certifiers", async function () {
+      const [, user1, certifier] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
-      // Register user and item
-      let hash = await marketplace.write.registerUser({
+      await assert.rejects(async () => {
+        await marketplace.write.addCertifier([certifier.account.address], {
+          account: user1.account,
+        });
+      }, /Not owner/);
+    });
+
+    it("Should certify an item", async function () {
+      const [owner, user1] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      // Register item
+      let hash = await marketplace.write.registerItem([
+        "iPad Air",
+        "SN555555555",
+        "iPad Air 4ème génération",
+        "ipfs://Qm..."
+      ], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      hash = await marketplace.write.registerItem([
+      // Certify item
+      hash = await marketplace.write.certifyItem([1], {
+        account: owner.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      const isCertified = await marketplace.read.isItemCertified([1]);
+      assert.equal(isCertified, true);
+
+      // Check certification details in item
+      const item = await marketplace.read.getItem([1]);
+      assert.equal(item[6], true); // isCertified
+    });
+
+    it("Should fail if non-certifier tries to certify", async function () {
+      const [, user1, nonCertifier] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      // Register item
+      let hash = await marketplace.write.registerItem([
         "Test Item",
-        parseEther("1.0"),
-        "A test item",
         "SN123456",
+        "A test item",
         "ipfs://test-image"
       ], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      // Register non-certifier user
-      hash = await marketplace.write.registerUser({
-        account: nonCertifier.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      // Try to certify item as non-certifier
+      // Try to certify as non-certifier
       await assert.rejects(async () => {
-        await marketplace.write.certifyItem([1n], {
+        await marketplace.write.certifyItem([1], {
           account: nonCertifier.account,
         });
-      }, /Not authorized certifier/);
+      }, /Not certifier/);
+    });
+
+    it("Should fail to certify non-existent item", async function () {
+      const [owner] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      await assert.rejects(async () => {
+        await marketplace.write.certifyItem([999], {
+          account: owner.account,
+        });
+      }, /Item doesn't exist/);
     });
   });
 
   describe("Item Listing and Sales", function () {
     it("Should allow owners to list items for sale", async function () {
-      const [, , user1] = await viem.getWalletClients();
+      const [, user1] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
-      // Register user and item
-      let hash = await marketplace.write.registerUser({
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      hash = await marketplace.write.registerItem([
-        "Test Item",
-        parseEther("1.0"),
-        "A test item",
-        "SN123456",
-        "ipfs://test-image"
+      // Register item
+      let hash = await marketplace.write.registerItem([
+        "PlayStation 5",
+        "SNPS5123456",
+        "PS5 avec 2 manettes",
+        "ipfs://Qm..."
       ], {
         account: user1.account,
       });
@@ -257,190 +214,196 @@ describe("CertifiedSecondHandMarketplace", async function () {
 
       // List item for sale
       const salePrice = parseEther("1.5");
-      hash = await marketplace.write.listItemForSale([1n, salePrice], {
+      hash = await marketplace.write.listForSale([1, salePrice], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      const item = await marketplace.read.items([1n]);
-      assert.equal(item[7], true); // isForSale
-      assert.equal(item[8], salePrice); // salePrice
+      const item = await marketplace.read.getItem([1]);
+      assert.equal(item[7], true); // forSale
+      assert.equal(item[8], salePrice); // price
     });
 
     it("Should prevent non-owners from listing items", async function () {
-      const [, , user1, user2] = await viem.getWalletClients();
+      const [, user1, user2] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
-
-      // Register users
-      let hash = await marketplace.write.registerUser({
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      hash = await marketplace.write.registerUser({
-        account: user2.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
 
       // Register item with user1
-      hash = await marketplace.write.registerItem([
+      let hash = await marketplace.write.registerItem([
         "Test Item",
-        parseEther("1.0"),
-        "A test item",
         "SN123456",
+        "A test item",
         "ipfs://test-image"
       ], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      // Try to list item with user2 (not owner)
+      // Try to list with user2
       await assert.rejects(async () => {
-        await marketplace.write.listItemForSale([1n, parseEther("1.5")], {
+        await marketplace.write.listForSale([1, parseEther("1.5")], {
           account: user2.account,
         });
-      }, /Not the owner/);
+      }, /Not owner/);
     });
 
-    it("Should allow purchasing items with platform fee", async function () {
-      const [owner, seller, buyer] = await viem.getWalletClients();
+    it("Should allow purchasing items", async function () {
+      const [, seller, buyer] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
-      // Register users
-      let hash = await marketplace.write.registerUser({
-        account: seller.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      hash = await marketplace.write.registerUser({
-        account: buyer.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
       // Register and list item
-      hash = await marketplace.write.registerItem([
+      let hash = await marketplace.write.registerItem([
         "Test Item",
-        parseEther("1.0"),
-        "A test item",
         "SN123456",
+        "A test item",
         "ipfs://test-image"
       ], {
         account: seller.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      const salePrice = parseEther("1.5");
-      hash = await marketplace.write.listItemForSale([1n, salePrice], {
+      const salePrice = parseEther("1.0");
+      hash = await marketplace.write.listForSale([1, salePrice], {
         account: seller.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      // Get initial balances
+      // Get initial balance
       const sellerBalanceBefore = await publicClient.getBalance({
         address: seller.account.address,
       });
-      const platformBalanceBefore = await publicClient.getBalance({
-        address: owner.account.address, // platformWallet is owner by default
-      });
 
       // Purchase item
-      hash = await marketplace.write.purchaseItem([1n], {
+      hash = await marketplace.write.buyItem([1], {
         value: salePrice,
         account: buyer.account,
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      await publicClient.waitForTransactionReceipt({ hash });
 
-      // Check balances after purchase
+      // Check item ownership
+      const item = await marketplace.read.getItem([1]);
+      assert.equal(
+        item[5].toLowerCase(), // itemOwner (changed from owner to avoid shadowing)
+        buyer.account.address.toLowerCase()
+      );
+      assert.equal(item[7], false); // forSale
+
+      // Check seller received funds
       const sellerBalanceAfter = await publicClient.getBalance({
         address: seller.account.address,
       });
-      const platformBalanceAfter = await publicClient.getBalance({
-        address: owner.account.address,
-      });
+      assert.ok(sellerBalanceAfter > sellerBalanceBefore);
 
-      // Calculate expected amounts
-      const platformFeeAmount = (salePrice * 250n) / 10000n; // 2.5% fee
-      const sellerAmount = salePrice - platformFeeAmount;
-
-      // Check item ownership transfer
-      assert.equal(
-        (await marketplace.read.ownerOf([1n])).toLowerCase(),
-        buyer.account.address.toLowerCase()
-      );
-      
-      // Check item is no longer for sale
-      const item = await marketplace.read.items([1n]);
-      assert.equal(item[7], false); // isForSale
-
-      // Check balances (approximate due to gas costs)
-      const sellerExpected = sellerBalanceBefore + sellerAmount;
-      const platformExpected = platformBalanceBefore + platformFeeAmount;
-      
-      // Allow for small difference due to gas costs
-      assert.ok(sellerBalanceAfter >= sellerExpected - parseEther("0.01") && sellerBalanceAfter <= sellerExpected);
-      assert.equal(platformBalanceAfter, platformExpected);
+      // Check transaction count increased
+      assert.equal(item[9], 2n); // transactionCount (registration + purchase)
     });
 
-    it("Should prevent self-purchase", async function () {
-      const [, , user1] = await viem.getWalletClients();
+    it("Should prevent purchasing items not for sale", async function () {
+      const [, seller, buyer] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
-      // Register user and item
-      let hash = await marketplace.write.registerUser({
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      hash = await marketplace.write.registerItem([
+      // Register item but don't list for sale
+      let hash = await marketplace.write.registerItem([
         "Test Item",
-        parseEther("1.0"),
-        "A test item",
         "SN123456",
+        "A test item",
         "ipfs://test-image"
       ], {
-        account: user1.account,
+        account: seller.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      // List item for sale
-      const salePrice = parseEther("1.5");
-      hash = await marketplace.write.listItemForSale([1n, salePrice], {
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      // Try to purchase own item
+      // Try to purchase item not for sale
       await assert.rejects(async () => {
-        await marketplace.write.purchaseItem([1n], {
-          value: salePrice,
-          account: user1.account,
+        await marketplace.write.buyItem([1], {
+          value: parseEther("1.0"),
+          account: buyer.account,
         });
-      }, /Cannot buy own item/);
+      }, /Not for sale/);
+    });
+
+    it("Should prevent purchasing with insufficient funds", async function () {
+      const [, seller, buyer] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      // Register and list item
+      let hash = await marketplace.write.registerItem([
+        "Test Item",
+        "SN123456",
+        "A test item",
+        "ipfs://test-image"
+      ], {
+        account: seller.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      const salePrice = parseEther("1.0");
+      hash = await marketplace.write.listForSale([1, salePrice], {
+        account: seller.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      // Try to purchase with insufficient funds
+      await assert.rejects(async () => {
+        await marketplace.write.buyItem([1], {
+          value: parseEther("0.5"), // Less than sale price
+          account: buyer.account,
+        });
+      }, /Insufficient funds/);
+    });
+
+    it("Should update user items lists after purchase", async function () {
+      const [, seller, buyer] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      // Register and list item
+      let hash = await marketplace.write.registerItem([
+        "Test Item",
+        "SN123456",
+        "A test item",
+        "ipfs://test-image"
+      ], {
+        account: seller.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      const salePrice = parseEther("1.0");
+      hash = await marketplace.write.listForSale([1, salePrice], {
+        account: seller.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      // Purchase item
+      hash = await marketplace.write.buyItem([1], {
+        value: salePrice,
+        account: buyer.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      // Check user items lists
+      const sellerItems = await marketplace.read.getUserItems({
+        account: seller.account,
+      });
+      const buyerItems = await marketplace.read.getUserItems({
+        account: buyer.account,
+      });
+
+      assert.equal(sellerItems.length, 0);
+      assert.equal(buyerItems.length, 1);
+      assert.equal(buyerItems[0], 1);
     });
   });
 
   describe("Item Transfers", function () {
-    it("Should allow owners to transfer items to registered users", async function () {
-      const [, , user1, user2] = await viem.getWalletClients();
+    it("Should allow owners to transfer items", async function () {
+      const [, user1, user2] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
-      // Register users
-      let hash = await marketplace.write.registerUser({
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      hash = await marketplace.write.registerUser({
-        account: user2.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
       // Register item
-      hash = await marketplace.write.registerItem([
+      let hash = await marketplace.write.registerItem([
         "Test Item",
-        parseEther("1.0"),
-        "A test item",
         "SN123456",
+        "A test item",
         "ipfs://test-image"
       ], {
         account: user1.account,
@@ -448,214 +411,288 @@ describe("CertifiedSecondHandMarketplace", async function () {
       await publicClient.waitForTransactionReceipt({ hash });
 
       // Transfer item
-      hash = await marketplace.write.transferItem([user2.account.address, 1n], {
+      hash = await marketplace.write.transferItem([1, user2.account.address], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
+      const item = await marketplace.read.getItem([1]);
       assert.equal(
-        (await marketplace.read.ownerOf([1n])).toLowerCase(),
+        item[5].toLowerCase(), // itemOwner
         user2.account.address.toLowerCase()
       );
-    });
+      assert.equal(item[7], false); // forSale should be false after transfer
 
-    it("Should prevent transfers to unregistered users", async function () {
-      const [, , user1, unregisteredUser] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
-
-      // Register user1 only
-      let hash = await marketplace.write.registerUser({
+      // Check user items lists
+      const user1Items = await marketplace.read.getUserItems({
         account: user1.account,
       });
-      await publicClient.waitForTransactionReceipt({ hash });
+      const user2Items = await marketplace.read.getUserItems({
+        account: user2.account,
+      });
 
-      // Register item
-      hash = await marketplace.write.registerItem([
+      assert.equal(user1Items.length, 0);
+      assert.equal(user2Items.length, 1);
+      assert.equal(user2Items[0], 1);
+
+      // Check transaction count increased
+      assert.equal(item[9], 2n); // transactionCount (registration + transfer)
+    });
+
+    it("Should prevent non-owners from transferring items", async function () {
+      const [, user1, user2, user3] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      // Register item with user1
+      let hash = await marketplace.write.registerItem([
         "Test Item",
-        parseEther("1.0"),
-        "A test item",
         "SN123456",
+        "A test item",
         "ipfs://test-image"
       ], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      // Try to transfer to unregistered user
+      // Try to transfer with user2 (not owner)
       await assert.rejects(async () => {
-        await marketplace.write.transferItem([unregisteredUser.account.address, 1n], {
-          account: user1.account,
+        await marketplace.write.transferItem([1, user3.account.address], {
+          account: user2.account,
         });
-      }, /Recipient not registered/);
+      }, /Not owner/);
+    });
+
+    it("Should add transfer transaction with zero price", async function () {
+      const [, user1, user2] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      // Register item
+      let hash = await marketplace.write.registerItem([
+        "Test Item",
+        "SN123456",
+        "A test item",
+        "ipfs://test-image"
+      ], {
+        account: user1.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      // Transfer item
+      hash = await marketplace.write.transferItem([1, user2.account.address], {
+        account: user1.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      const transactions = await marketplace.read.getItemTransactions([1]);
+      assert.equal(transactions[0].length, 2); // owners (registration + transfer)
+      assert.equal(
+        transactions[0][1].toLowerCase(),
+        user2.account.address.toLowerCase()
+      );
+      assert.equal(transactions[2][1], 0n); // salePrice should be 0 for transfer
     });
   });
 
   describe("View Functions", function () {
-    it("Should return correct item verification details", async function () {
-      const [, , user1] = await viem.getWalletClients();
+    it("Should return all items correctly", async function () {
+      const [, user1] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
-      // Register user and item
-      let hash = await marketplace.write.registerUser({
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
+      // Register multiple items
+      const itemsToCreate = [
+        { name: "Item 1", numSerie: "SN1", description: "Desc 1", image: "ipfs://1" },
+        { name: "Item 2", numSerie: "SN2", description: "Desc 2", image: "ipfs://2" },
+        { name: "Item 3", numSerie: "SN3", description: "Desc 3", image: "ipfs://3" },
+      ];
 
-      hash = await marketplace.write.registerItem([
+      for (const item of itemsToCreate) {
+        const hash = await marketplace.write.registerItem([
+          item.name,
+          item.numSerie,
+          item.description,
+          item.image
+        ], {
+          account: user1.account,
+        });
+        await publicClient.waitForTransactionReceipt({ hash });
+      }
+
+      const allItems = await marketplace.read.getAllItems();
+      assert.equal(allItems[0].length, 3); // ids
+      assert.equal(allItems[1].length, 3); // names
+      assert.equal(allItems[2].length, 3); // numSeries
+      assert.equal(allItems[3].length, 3); // owners
+      assert.equal(allItems[4].length, 3); // isCertifieds
+      assert.equal(allItems[5].length, 3); // forSales
+      assert.equal(allItems[6].length, 3); // prices
+      assert.equal(allItems[7].length, 3); // transactionCounts
+
+      // Check all items have 1 transaction (registration)
+      for (let i = 0; i < 3; i++) {
+        assert.equal(allItems[7][i], 1n); // transactionCount
+      }
+    });
+
+    it("Should return item details correctly", async function () {
+      const [, user1] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      // Register item
+      const hash = await marketplace.write.registerItem([
         "Test Item",
-        parseEther("1.0"),
-        "A test item",
         "SN123456",
+        "A detailed description",
         "ipfs://test-image"
       ], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      // Verify item
-      const verification = await marketplace.read.verifyItemBySerialNumber(["SN123456"]);
-      assert.equal(verification[0], true); // exists
-      assert.equal(verification[1], 1n); // tokenId
+      const item = await marketplace.read.getItem([1]);
+      assert.equal(item[0], 1); // id
+      assert.equal(item[1], "Test Item"); // name
+      assert.equal(item[2], "SN123456"); // numSerie
+      assert.equal(item[3], "A detailed description"); // description
+      assert.equal(item[4], "ipfs://test-image"); // image
       assert.equal(
-        verification[2].toLowerCase(), // owner
+        item[5].toLowerCase(), // itemOwner
         user1.account.address.toLowerCase()
       );
-      assert.equal(verification[3], false); // isCertified
+      assert.equal(item[6], false); // isCertified
+      assert.equal(item[7], false); // forSale
+      assert.equal(item[8], 0n); // price
+      assert.equal(item[9], 1n); // transactionCount
     });
 
-    it("Should return user items correctly", async function () {
-      const [, , user1] = await viem.getWalletClients();
+    it("Should return item transactions correctly", async function () {
+      const [, user1, user2] = await viem.getWalletClients();
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
-      // Register user
-      let hash = await marketplace.write.registerUser({
+      // Register item
+      let hash = await marketplace.write.registerItem([
+        "Test Item",
+        "SN123456",
+        "A test item",
+        "ipfs://test-image"
+      ], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      // Register multiple items
-      for (let i = 0; i < 3; i++) {
-        hash = await marketplace.write.registerItem([
-          `Test Item ${i}`,
-          parseEther("1.0"),
-          `A test item ${i}`,
-          `SN12345${i}`,
-          `ipfs://test-image-${i}`
-        ], {
-          account: user1.account,
-        });
-        await publicClient.waitForTransactionReceipt({ hash });
-      }
-
-      const userItems = await marketplace.read.getUserItems([user1.account.address]);
-      assert.equal(userItems.length, 3);
-      assert.equal(await marketplace.read.getUserItemsCount({
-        account: user1.account,
-      }), 3n);
-    });
-
-    it("Should return available items correctly", async function () {
-      const [, , user1, user2] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
-
-      // Register users
-      let hash = await marketplace.write.registerUser({
+      // Transfer item to create another transaction
+      hash = await marketplace.write.transferItem([1, user2.account.address], {
         account: user1.account,
       });
       await publicClient.waitForTransactionReceipt({ hash });
 
-      hash = await marketplace.write.registerUser({
-        account: user2.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
+      const transactions = await marketplace.read.getItemTransactions([1]);
+      assert.equal(transactions[0].length, 2); // owners (registration + transfer)
+      assert.equal(transactions[1].length, 2); // datetimes
+      assert.equal(transactions[2].length, 2); // salePrices
 
-      // Register items - some for sale, some not
-      const itemsToCreate = [
-        { name: "Item 1", forSale: true, price: parseEther("1.0") },
-        { name: "Item 2", forSale: false, price: 0n },
-        { name: "Item 3", forSale: true, price: parseEther("2.0") },
-        { name: "Item 4", forSale: true, price: parseEther("3.0") },
-      ];
-
-      for (let i = 0; i < itemsToCreate.length; i++) {
-        hash = await marketplace.write.registerItem([
-          itemsToCreate[i].name,
-          parseEther("1.0"),
-          `Description ${i}`,
-          `SN${i}`,
-          `ipfs://image-${i}`
-        ], {
-          account: user1.account,
-        });
-        await publicClient.waitForTransactionReceipt({ hash });
-
-        if (itemsToCreate[i].forSale) {
-          hash = await marketplace.write.listItemForSale([BigInt(i + 1), itemsToCreate[i].price], {
-            account: user1.account,
-          });
-          await publicClient.waitForTransactionReceipt({ hash });
-        }
-      }
-
-      const availableItems = await marketplace.read.getAvailableItems();
-      assert.equal(availableItems.length, 3);
-      assert.equal(await marketplace.read.getAvailableItemsCount(), 3n);
+      // Check transaction details
+      assert.equal(
+        transactions[0][0].toLowerCase(),
+        user1.account.address.toLowerCase()
+      ); // First transaction (registration)
+      assert.equal(
+        transactions[0][1].toLowerCase(),
+        user2.account.address.toLowerCase()
+      ); // Second transaction (transfer)
+      assert.equal(transactions[2][0], 0n); // Registration price = 0
+      assert.equal(transactions[2][1], 0n); // Transfer price = 0
     });
   });
 
   describe("Edge Cases", function () {
-    it("Should handle item history correctly", async function () {
-      const [, , user1, user2] = await viem.getWalletClients();
-      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
-
-      // Register users
-      let hash = await marketplace.write.registerUser({
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      hash = await marketplace.write.registerUser({
-        account: user2.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      // Register item
-      hash = await marketplace.write.registerItem([
-        "Test Item",
-        parseEther("1.0"),
-        "A test item",
-        "SN123456",
-        "ipfs://test-image"
-      ], {
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      // Transfer item
-      hash = await marketplace.write.transferItem([user2.account.address, 1n], {
-        account: user1.account,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      // Get item history
-      const history = await marketplace.read.getItemHistory([1n]);
-      assert.equal(history.length, 2);
-      assert.equal(history[0].transactionType, "Registration");
-      assert.equal(history[1].transactionType, "Transfer");
-    });
-
     it("Should handle non-existent items correctly", async function () {
       const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
 
-      // Verify non-existent serial number
-      const verification = await marketplace.read.verifyItemBySerialNumber(["NONEXISTENT"]);
-      assert.equal(verification[0], false); // exists
+      // Try to access non-existent item
+      await assert.rejects(async () => {
+        await marketplace.read.getItem([999]);
+      }, /Item doesn't exist/);
 
-      // Try to access non-existent item - this should not throw an error but return empty/default values
-      // The contract doesn't seem to have a require statement for item existence in the items mapping
-      // So we'll just check that it doesn't throw and returns some values
-      const item = await marketplace.read.items([999n]);
-      assert.ok(item !== undefined);
+      await assert.rejects(async () => {
+        await marketplace.read.isItemCertified([999]);
+      }, /Item doesn't exist/);
+
+      await assert.rejects(async () => {
+        await marketplace.read.getItemTransactions([999]);
+      }, /Item doesn't exist/);
+    });
+
+    it("Should handle item purchase with exact funds", async function () {
+      const [, seller, buyer] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      // Register and list item
+      let hash = await marketplace.write.registerItem([
+        "Test Item",
+        "SN123456",
+        "A test item",
+        "ipfs://test-image"
+      ], {
+        account: seller.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      const salePrice = parseEther("1.0");
+      hash = await marketplace.write.listForSale([1, salePrice], {
+        account: seller.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      // Purchase with exact amount
+      hash = await marketplace.write.buyItem([1], {
+        value: salePrice,
+        account: buyer.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      const item = await marketplace.read.getItem([1]);
+      assert.equal(
+        item[5].toLowerCase(), // itemOwner
+        buyer.account.address.toLowerCase()
+      );
+    });
+
+    it("Should handle purchase transaction correctly", async function () {
+      const [, seller, buyer] = await viem.getWalletClients();
+      const marketplace = await viem.deployContract("CertifiedSecondHandMarketplace", []);
+
+      // Register and list item
+      let hash = await marketplace.write.registerItem([
+        "Test Item",
+        "SN123456",
+        "A test item",
+        "ipfs://test-image"
+      ], {
+        account: seller.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      const salePrice = parseEther("1.0");
+      hash = await marketplace.write.listForSale([1, salePrice], {
+        account: seller.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      // Purchase item
+      hash = await marketplace.write.buyItem([1], {
+        value: salePrice,
+        account: buyer.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      // Check transaction history
+      const transactions = await marketplace.read.getItemTransactions([1]);
+      assert.equal(transactions[0].length, 2); // registration + purchase
+      assert.equal(transactions[2][1], salePrice); // Purchase price should match salePrice
+      assert.equal(
+        transactions[0][1].toLowerCase(),
+        buyer.account.address.toLowerCase()
+      ); // Purchase transaction owner should be buyer
     });
   });
 });
