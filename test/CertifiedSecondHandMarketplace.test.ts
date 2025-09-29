@@ -55,7 +55,7 @@ describe("CertifiedSecondHandMarketplace", async function () {
       assert.equal(items[1][0], "iPhone 12");
       assert.equal(items[2][0], "SN123456789");
       assert.equal(
-        items[3][0].toLowerCase(),
+        items[5][0].toLowerCase(),
         user1.account.address.toLowerCase()
       );
     });
@@ -521,15 +521,17 @@ describe("CertifiedSecondHandMarketplace", async function () {
       assert.equal(allItems[0].length, 3); // ids
       assert.equal(allItems[1].length, 3); // names
       assert.equal(allItems[2].length, 3); // numSeries
-      assert.equal(allItems[3].length, 3); // owners
-      assert.equal(allItems[4].length, 3); // isCertifieds
-      assert.equal(allItems[5].length, 3); // forSales
-      assert.equal(allItems[6].length, 3); // prices
-      assert.equal(allItems[7].length, 3); // transactionCounts
+      assert.equal(allItems[3].length, 3); // images
+      assert.equal(allItems[4].length, 3); // descriptions
+      assert.equal(allItems[5].length, 3); // owners
+      assert.equal(allItems[6].length, 3); // isCertifieds
+      assert.equal(allItems[7].length, 3); // forSales
+      assert.equal(allItems[8].length, 3); // prices
+      assert.equal(allItems[9].length, 3); // transactionCounts
 
       // Check all items have 1 transaction (registration)
       for (let i = 0; i < 3; i++) {
-        assert.equal(allItems[7][i], 1n); // transactionCount
+        assert.equal(allItems[9][i], 1n); // transactionCount
       }
     });
 

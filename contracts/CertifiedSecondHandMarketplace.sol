@@ -97,6 +97,8 @@ contract CertifiedSecondHandMarketplace {
         uint16[] memory ids,
         string[] memory names,
         string[] memory numSeries,
+        string[] memory images,
+        string[] memory descriptions,
         address[] memory owners,
         bool[] memory isCertifieds,
         bool[] memory forSales,
@@ -108,6 +110,8 @@ contract CertifiedSecondHandMarketplace {
         ids = new uint16[](itemCount);
         names = new string[](itemCount);
         numSeries = new string[](itemCount);
+        descriptions = new string[](itemCount);
+        images = new string[](itemCount);
         owners = new address[](itemCount);
         isCertifieds = new bool[](itemCount);
         forSales = new bool[](itemCount);
@@ -119,6 +123,8 @@ contract CertifiedSecondHandMarketplace {
                 ids[i-1] = items[i].id;
                 names[i-1] = items[i].name;
                 numSeries[i-1] = items[i].numSerie;
+                images[i-1] = items[i].image;
+                descriptions[i-1] = items[i].description;
                 owners[i-1] = items[i].owner;
                 isCertifieds[i-1] = items[i].isCertified;
                 forSales[i-1] = items[i].forSale;
@@ -127,7 +133,7 @@ contract CertifiedSecondHandMarketplace {
             }
         }
         
-        return (ids, names, numSeries, owners, isCertifieds, forSales, prices, transactionCounts);
+        return (ids, names, numSeries,images, descriptions, owners, isCertifieds, forSales, prices, transactionCounts);
     }
     
     // Lister tous les biens d'un utilisateur
