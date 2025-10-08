@@ -10,6 +10,13 @@ contract CertifiedSecondHandMarketplace {
         uint32 datetime;
         uint256 salePrice;
     }
+
+    struct User {
+        string name;
+        string email;
+        string location;
+        bool status; // Active or Inactive
+    }
     
     struct Item {
         uint16 id;
@@ -23,13 +30,16 @@ contract CertifiedSecondHandMarketplace {
         bool forSale;
         uint256 price;
         Transaction[] transactions;
+        string proofImage; // New field for proof image
     }
     
     mapping(uint16 => Item) public items;
     mapping(address => uint16[]) public userItems;
     mapping(address => bool) public certifiers;
+    mapping(address => User) public users;
     
     event ItemRegistered(uint16 id, address owner);
+    event userRegistered(address userAddress, string name, string email, string location);
     event ItemCertified(uint16 id, address certifier);
     event ItemSold(uint16 id, address buyer, uint256 price);
     event ItemTransferred(uint16 id, address from, address to);
@@ -48,6 +58,11 @@ contract CertifiedSecondHandMarketplace {
         require(certifiers[msg.sender], "Not certifier");
         _;
     }
+
+     modifier onlyRegistered() {
+        require(users[msg.sender].status == true, "Not registered");
+        _; 
+    }
     
     modifier itemExists(uint16 _itemId) {
         require(items[_itemId].owner != address(0), "Item doesn't exist");
@@ -58,14 +73,31 @@ contract CertifiedSecondHandMarketplace {
         owner = msg.sender;
         certifiers[msg.sender] = true;
     }
+
+    function registerUser(string memory _name, string memory _email, string memory _location) public  {
+        users[msg.sender] = User({
+            name: _name,
+            email: _email,
+            location: _location,
+            status: true
+        });
+
+        emit userRegistered(msg.sender, _name, _email, _location);
+    }
+
+    function getUser(address _userAddress) external view returns (string memory name, string memory email, string memory location, bool status) {
+        User storage user = users[_userAddress];
+        return (user.name, user.email, user.location, user.status);
+    }
     
     // Enregistrer un bien
     function registerItem(
         string memory _name,
         string memory _numSerie,
         string memory _description,
-        string memory _image
-    ) external {
+        string memory _image,
+        string memory _proofImage
+    ) external onlyRegistered {
         _itemIdCounter++;
         
         // Create the item first
@@ -75,6 +107,7 @@ contract CertifiedSecondHandMarketplace {
         newItem.numSerie = _numSerie;
         newItem.description = _description;
         newItem.image = _image;
+        newItem.proofImage = _proofImage;
         newItem.owner = msg.sender;
         newItem.isCertified = false;
         newItem.certifiedBy = address(0);
@@ -103,7 +136,9 @@ contract CertifiedSecondHandMarketplace {
         bool[] memory isCertifieds,
         bool[] memory forSales,
         uint256[] memory prices,
-        uint256[] memory transactionCounts
+        uint256[] memory transactionCounts,
+        string[] memory proofImages,
+        string[] memory ownerNames
     ) {
         uint16 itemCount = _itemIdCounter;
         
@@ -117,6 +152,8 @@ contract CertifiedSecondHandMarketplace {
         forSales = new bool[](itemCount);
         prices = new uint256[](itemCount);
         transactionCounts = new uint256[](itemCount);
+        proofImages = new string[](itemCount);
+        ownerNames = new string[](itemCount);
         
         for (uint16 i = 1; i <= itemCount; i++) {
             if (items[i].owner != address(0)) {
@@ -130,10 +167,12 @@ contract CertifiedSecondHandMarketplace {
                 forSales[i-1] = items[i].forSale;
                 prices[i-1] = items[i].price;
                 transactionCounts[i-1] = items[i].transactions.length;
+                proofImages[i-1] = items[i].proofImage;
+                ownerNames[i-1] = users[items[i].owner].name;
             }
         }
         
-        return (ids, names, numSeries,images, descriptions, owners, isCertifieds, forSales, prices, transactionCounts);
+        return (ids, names, numSeries,images, descriptions, owners, isCertifieds, forSales, prices, transactionCounts, proofImages, ownerNames);
     }
     
     // Lister tous les biens d'un utilisateur
@@ -234,7 +273,8 @@ contract CertifiedSecondHandMarketplace {
         bool isCertified,
         bool forSale,
         uint256 price,
-        uint256 transactionCount
+        uint256 transactionCount,
+        string memory proofImage
     ) {
         Item storage item = items[_itemId];
         return (
@@ -247,7 +287,8 @@ contract CertifiedSecondHandMarketplace {
             item.isCertified,
             item.forSale,
             item.price,
-            item.transactions.length
+            item.transactions.length,
+            item.proofImage
         );
     }
     
